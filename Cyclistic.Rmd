@@ -1,0 +1,285 @@
+---
+title: "Cyclistic Project"
+author: "Juan Castro"
+date: "2025-04-10"
+output: html_document
+---
+
+## Business problem
+
+The director of marketing believes the company’s future success depends on maximizing the number of annual memberships. Therefore, the team wants to understand how casual riders and annual members use Cyclistic bikes differently. From these insights, the team will design a new marketing strategy to convert casual riders into annual members. But first, Cyclistic executives must approve your recommendations, so they must be backed up with compelling data insights and professional data visualizations.
+
+ASK
+1. How do annual members and casual riders use Cyclistic bikes differently?
+
+Link 2019 Q1 file
+https://docs.google.com/spreadsheets/d/1uCTsHlZLm4L7-ueaSLwDg0ut3BP_V4mKDo2IMpaXrk4/template/preview?resourcekey=0-dQAUjAu2UUCsLEQQt20PDA#gid=1797029090
+
+Link 2020 Q1 file
+https://docs.google.com/spreadsheets/d/179QVLO_yu5BJEKFVZShsKag74ZaUYIF6FevLYzs3hRc/template/preview#gid=640449855
+
+## Setting up my enviroment
+Notes: Setting up my R environment by loading the necessary packages as 'tidyverse', 'ggplot2' and others.  
+
+```{r loading packages}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(here)
+library(skimr)
+library(janitor)
+```
+
+After of that I uploaded the files
+
+```{r Upload the data}
+Div_Trips_2019_Q1 <- read.csv('D:/JUAN/Data Analyst/Google analytics/Capstone-Case study/Cyclistic/2019_Q1-Trips.csv')
+Div_Trips_2020_Q1 <- read.csv('D:/JUAN/Data Analyst/Google analytics/Capstone-Case study/Cyclistic/2020_Q1-Trips.CSV')
+```
+
+The files are in CSV format, 2019 with 365.069 rows and 2020 with 426,887 rows. I made the first touch to the data, I used the instructions bellow.
+
+```{r resume 1}
+glimpse(Div_Trips_2019_Q1)
+glimpse(Div_Trips_2020_Q1)
+```
+
+So, I verified the summary of the datasets, some problems with the trip duration, start and end time are the same and the tripduration is 0, I deleted this rows (doesn't exist trip with 0 secs duration - deleted 93 rows.)
+
+```{r resume 2}
+summary(Div_Trips_2019_Q1)
+summary(Div_Trips_2020_Q1)
+
+```
+
+## Cleaning and prepare data
+
+
+First of all, I homogenized both datasets, changed the columns names at the same (where is possible), also, the user type will converted as the same categorization "subscriber - customer". With this info I realized that some columns are in the incorrect format (Start_time,end_time,tripduration), so it was necessary to change their formats. Also, I added a new columns as "day_of_week" from start_time. 
+
+```{r change format and rename}
+Div_Trips_2019_Q1 <- Div_Trips_2019_Q1 %>%
+  mutate(start_time = as.POSIXct(start_time, format = "%Y-%m-%d %H:%M:%S"),
+  end_time = as.POSIXct(end_time, format = "%Y-%m-%d %H:%M:%S"),
+  tripduration = round(as.numeric(gsub(",","",tripduration)),2),
+  day_of_week = weekdays(start_time,1),
+  trip_id = as.character(trip_id)
+  )
+
+Div_Trips_2020_Q1 <- Div_Trips_2020_Q1 %>%
+  rename(start_time = started_at,
+         end_time = ended_at,
+         usertype = member_casual,
+         trip_id = ride_id,
+         from_station_id = start_station_id,
+         from_station_name=start_station_name,
+         to_station_id = end_station_id,
+         to_station_name = end_station_name) %>%
+  mutate(start_time = as.POSIXct(start_time, format = "%Y-%m-%d %H:%M:%S"),
+         end_time = as.POSIXct(end_time, format = "%Y-%m-%d %H:%M:%S"),
+         tripduration = round(as.numeric(difftime(end_time,start_time,units = "secs")),2),
+         day_of_week = weekdays(start_time,1),
+         usertype = case_when(
+           usertype == "member" ~ "Subscriber",
+           usertype == "casual" ~ "Customer")
+         )
+```
+
+Verify and clean columns name
+
+```{r clean column names}
+  Div_Trips_2019_Q1 <- janitor::clean_names(Div_Trips_2019_Q1)
+  Div_Trips_2020_Q1 <- janitor::clean_names(Div_Trips_2020_Q1)
+```
+
+
+Check the NA values
+```{r check the NA Values}
+colSums(is.na(Div_Trips_2019_Q1))
+colSums(is.na(Div_Trips_2020_Q1))
+```
+
+As the column birthyear (Div_Trips_2019_Q1) has 18023 NA values, I changed those 0. At the same way for to_station_id (1), end_lat (1) and end_lng(1) (Div_Trips_2020_Q1).
+
+```{r Change NA values}
+Div_Trips_2019_Q1 <- Div_Trips_2019_Q1 %>%
+  mutate(birthyear = ifelse(is.na(birthyear),0,birthyear))
+
+Div_Trips_2020_Q1 <- Div_Trips_2020_Q1 %>%
+  mutate(to_station_id = ifelse(is.na(to_station_id),0,to_station_id),
+         end_lat = ifelse(is.na(end_lat),0,end_lat),
+         end_lng = ifelse(is.na(end_lng),0,end_lng))
+```
+
+I verified if any dataset has a duplicate row, nothing appears.
+
+```{r Check duplicated rows}
+Div_Trips_2019_Q1 %>% 
+  duplicated() %>% sum()
+
+Div_Trips_2020_Q1 %>% 
+  duplicated() %>% sum()
+```
+
+In the summary, I realized that 2020 tripduration has a negative value, I filtered this condition and appears 117 values. It has a mistake, the columns start_time and end_time are truncated
+
+```{r error negative tripduration values}
+Div_Trips_2020_Q1 %>% 
+  select(start_time,end_time,tripduration)%>%
+  filter(tripduration < 0)
+```
+
+So, I applied the next code to correct the inverse columns (start_time / end_time)
+
+```{r correct truncated columns} 
+
+Div_Trips_2020_Q1 <- Div_Trips_2020_Q1 %>%
+  mutate(
+    start_time = if_else(tripduration < 0, end_time, start_time),
+    end_time   = if_else(tripduration < 0, start_time, end_time)
+  )
+
+Div_Trips_2020_Q1 <- Div_Trips_2020_Q1 %>%
+  mutate(tripduration = as.numeric(difftime(end_time, start_time, units = "secs")))
+```
+With that, I realized that 210 rows have the same data for "star_time" and "end_time", these register are not consider in the analysis
+
+```{r Correct 0 }
+Div_correct_Trips_2020_Q1 <- Div_Trips_2020_Q1 %>%
+  filter(start_time != end_time)
+```
+
+
+## Analysis
+
+As 2020 file doesn't has a "gender" classification, I want to check which gender used the most part of the service and user type. However, there are some fields with empty information as "", to be precise are 19711 rows.
+
+```{r}
+sum(Div_Trips_2019_Q1$gender == "", na.rm = TRUE)
+```
+
+So, I debugged the correct information
+
+```{r gender correct}
+Gender_correct <- Div_Trips_2019_Q1 %>%
+  filter(gender != "") %>%
+  count(gender,usertype)
+```
+
+As graphic
+
+```{r first plot}
+ggplot(data = Gender_correct) + geom_bar(mapping = aes(x = gender, y= n, fill = usertype),
+            stat = "identity", position = "dodge") + facet_grid(~usertype) + 
+            labs(title="Trips per gender and user type", x="Gender", y = "Number of trips", fill = "User type")
+```
+
+So, in this result shows that the biggest part of the user are "subscriber" (annual memberships) and males. I want to know the range of ages that are the users.
+
+```{r Age range}
+
+Rage <- Div_Trips_2019_Q1 %>%
+  filter(birthyear > 1929) %>%
+  mutate(years_old = 2020 - birthyear,
+         age_group = cut(years_old,
+                         breaks = c(0 , 18, 24, 34, 44, 54, 64, 90),
+                         labels = c("-18","18-24", "25-34", "35-44", "45-54","55,64", "65+"),
+                         right = FALSE))
+
+```
+
+I appreciated that the most users are subscriber / customer are in a range between 25 to 44 years old.
+
+```{r}
+Rage %>%
+  count(age_group,usertype) %>%
+  ggplot(aes(x = age_group, y= n, fill = usertype)) +
+                                                      geom_bar(stat = "identity", position = "dodge") +
+                                                      facet_grid(~usertype) +
+                                                      labs(title="Trips per age ranges", x="Age ranges", y = "Number of trips", fill = "User type")
+```
+
+So, I created a dataset with both tables, just asociate the same columns
+```{r Union of datasets}
+Dep_Trips_2019 <- Div_Trips_2019_Q1 %>%
+  select(trip_id,start_time,day_of_week,end_time, tripduration, from_station_id, from_station_name, to_station_id, usertype)
+
+Dep_Trips_2020 <- Div_correct_Trips_2020_Q1 %>%
+  select(trip_id,start_time,day_of_week,end_time, tripduration, from_station_id, from_station_name, to_station_id, usertype)
+
+
+Total_base <- bind_rows(Dep_Trips_2019, Dep_Trips_2020)
+summary (Total_base)
+```
+
+Well, I wanted to compare which days are more use useful between customer and subscriber
+
+```{r day of week compare}
+weekday_counts <- Total_base %>%
+  count(day_of_week,usertype)%>%
+  group_by(usertype)%>%
+  mutate(day_of_week=reorder(day_of_week,n))
+
+ggplot(weekday_counts,aes(x = day_of_week, y= n, fill = usertype)) +
+  geom_bar(stat = "identity") +
+  facet_grid(~usertype) +
+  labs(title="Number of trips per day of week", x="Day of the week", y = "Number of trips", fill = "User type")
+```
+
+I appreciated that in the case of the customer, the days that more use the service are on Saturdays and Sundays. Differ to subscriber, they used the service along the week (Monday to Friday), where Tuesday and Thursday are higher.
+
+On the other hand, I compared the trip duration per type of user.
+
+```{r}
+Rtripduration <- Total_base %>%
+  mutate(tripd_group = cut(tripduration,
+                         breaks = c(1 , 328, 658, 984, Inf),
+                         labels = c("1-328","329-658", "659-984", "+985"),
+                         right = FALSE))
+
+Rtripduration %>%
+  count(tripd_group,usertype) %>%
+  ggplot(aes(x = tripd_group, y= n, fill = usertype)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_grid(~usertype) +
+  labs(title="Trips duration range and user type", x="Trip duration group (seconds)", y = "Number of trips", fill = "User Type")
+```
+
+The data shows that customers use the service for trips that spend more than 985 secs (16 minutes), in contrast to subscriber where they use the service in "short" trips that don't exceeded the same 16 minutes.
+
+It's important to know which station are the most use from each user type. 
+
+```{r Top 5 station}
+conteo <- Total_base %>%
+  count(from_station_name,usertype,sort = TRUE) %>%
+  group_by(usertype)%>%
+  slice_max(n,n=5)
+
+ggplot(conteo,aes(x=reorder(from_station_name,n),y=n, fill = usertype)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  facet_wrap(~usertype, scales = "free") +
+  labs(
+    title="Top 5 stations more used by user type",
+    x= "From station name",
+    y= "Trips number",
+    fill = "User type"
+  )
+```
+
+So, the customer and subscriber have different predilection about which station are more demand. 
+
+## Conclusions
+
+* Along the analysis I explored the differences between customer and subscriber (annual membership).
+
+1. In the study the most part of the population is male and type user subscriber. 
+2. The users are more part in the range of 25 and 44 years old, consider, that only the 2019 data set has the discrimination by genrde and birthday. 
+
+It's important to say that customer use more part of the service on Saturday and Sunday, the marketing department could explore some campaigns that incentive the use on different days on the week. This could support by the trips duration, the "casual" user use the bike service on casual trips, not for work or usual destination, also their trips spend more than 16 minutes. It shows that they use the service for free time and weekends, the company could shows the benefit to replace the traditional transport (as bus, car, motorbike etc), to a efficient transport like bike, and could use the service without the worries of parking or maintenance service (cost benefit). 
+
+At least, I compared the most use start station, they are different for each type of user, and confirm that both types of user have different purpose for the service. 
+
+
+

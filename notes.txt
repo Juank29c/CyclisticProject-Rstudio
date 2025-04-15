@@ -1,0 +1,21 @@
+1st.. type of memberships… user (ride, full day, anual)… person who bought day and ride casual...
+anual... cyclistic members.
+
+
+better members, more profitable… pricing flexibility…. business task: Design marketing strategies aimed at converting casual riders into
+annual members.
+
+however, the team needs to better understand how
+annual members and casual riders differ, why casual riders would buy a membership, and how
+digital media could affect their marketing tactics. Moreno and her team are interested in
+analyzing the Cyclistic historical bike trip data to identify trends.
+
+...p.question How do annual members and casual riders use Cyclistic bikes differently?
+
+formatos no congruentes, start_
+
+Div_Trips_2019_Q1$start_time <- as.POSIXct(Div_Trips_2019_Q1$start_time, format = "%Y-%m-%d %H:%M:%S")
+
+
+member - casual
+** subscriber - customer
